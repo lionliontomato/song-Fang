@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>隨機抽歌曲</title>
+  <meta name="description" content="從 Google 試算表即時讀取歌單並隨機抽歌曲。" />
+  <style>
+    :root {
+      --bg: #e9edf0;
+      --bg-soft: #f5f6f4;
+      --blue-900: #445866;
+      --blue-800: #536b7a;
+      --blue-700: #6f8794;
+      --blue-500: #8fa3ad;
+      --blue-300: #c4d0d5;
+      --cream: #f8f5ef;
+      --card: rgba(248, 245, 239, 0.82);
+      --text: #33424a;
+      --muted: #718087;
+      --line: rgba(68, 88, 102, 0.16);
+      --shadow: 0 24px 70px rgba(68, 88, 102, 0.22);
+      --radius-xl: 34px;
+      --radius-md: 20px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 12%, rgba(143, 163, 173, 0.45), transparent 34%),
+        radial-gradient(circle at 88% 80%, rgba(196, 208, 213, 0.72), transparent 38%),
+        linear-gradient(135deg, #dfe6e9 0%, #f8f5ef 52%, #d6e0e4 100%);
+      display: grid;
+      place-items: center;
+      padding: 28px;
+    }
+
+    .wrap {
+      width: min(980px, 100%);
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero, .panel {
+      background: var(--card);
+      border: 1px solid rgba(255, 255, 255, 0.58);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .hero {
+      padding: clamp(24px, 5vw, 52px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 260px;
+      height: 260px;
+      right: -80px;
+      top: -100px;
+      border-radius: 999px;
+      background: rgba(143, 163, 173, 0.18);
+      border: 1px solid rgba(83, 107, 122, 0.14);
+    }
+
+    .topbar {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(34px, 7vw, 68px);
+      line-height: 1.02;
+      letter-spacing: 0.05em;
+      color: var(--blue-900);
+    }
+
+    .subtitle {
+      margin: 0;
+      max-width: 650px;
+      line-height: 1.8;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .status {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.46);
+      color: var(--blue-800);
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-weight: 700;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .result {
+      position: relative;
+      z-index: 1;
+      min-height: 245px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 28px;
+      border-radius: 28px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.48), rgba(196,208,213,0.23));
+      border: 1px dashed rgba(83, 107, 122, 0.32);
+      overflow-wrap: anywhere;
+      margin-bottom: 22px;
+    }
+
+    .song-title {
+      margin: 0;
+      font-size: clamp(36px, 8vw, 78px);
+      line-height: 1.12;
+      font-weight: 900;
+      color: var(--blue-900);
+    }
+
+    .song-sub {
+      margin-top: 14px;
+      font-size: clamp(18px, 3vw, 28px);
+      line-height: 1.45;
+      color: var(--blue-700);
+      font-weight: 700;
+    }
+
+    .note {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .actions {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      cursor: pointer;
+      padding: 15px 24px;
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+    }
+
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.48; cursor: not-allowed; }
+
+    .primary {
+      color: #fff;
+      background: linear-gradient(135deg, var(--blue-800), var(--blue-500));
+      box-shadow: 0 14px 30px rgba(83, 107, 122, 0.28);
+    }
+
+    .secondary {
+      color: var(--blue-900);
+      background: rgba(255, 255, 255, 0.56);
+      border: 1px solid var(--line);
+    }
+
+    .panel {
+      padding: clamp(20px, 4vw, 34px);
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: baseline;
+      margin-bottom: 14px;
+    }
+
+    h2 {
+      margin: 0;
+      color: var(--blue-900);
+      font-size: 22px;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      text-align: right;
+    }
+
+    .song-list {
+      display: grid;
+      gap: 10px;
+      max-height: 320px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .song-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: center;
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,0.48);
+      border: 1px solid var(--line);
+      line-height: 1.45;
+    }
+
+    .song-item strong { color: var(--blue-900); }
+    .song-item small { color: var(--muted); }
+
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 0 12px;
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 14px; align-items: stretch; }
+      .topbar, .panel-head { display: block; }
+      .status { display: inline-block; margin-top: 16px; }
+      .hint { text-align: left; margin-top: 8px; }
+      button { width: 100%; }
+      .song-item { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div class="topbar">
+        <div>
+          <h1>隨機抽歌曲</h1>
+          <p class="subtitle">歌單會從 Google 試算表即時讀取。你更新表格後，只要重新整理網站或按「重新載入歌單」，網站就會同步最新內容。</p>
+        </div>
+        <div class="status" id="status">讀取中…</div>
+      </div>
+
+      <div class="result" id="result">
+        <div>
+          <p class="song-title">🎵</p>
+          <div class="song-sub">正在載入歌單</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="drawBtn" disabled>抽一首歌</button>
+        <button class="secondary" id="reloadBtn">重新載入歌單</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>目前歌單</h2>
+        <div class="hint">支援欄位：歌曲／歌名／Song／Title、歌手／Artist、備註／Note</div>
+      </div>
+      <div class="song-list" id="songList"></div>
+    </section>
+
+    <div class="footer">請將 Google 試算表權限設為「知道連結的任何人可查看」。若歌曲不在第一個工作表，請修改程式中的 SHEET_GID。</div>
+  </main>
+
+  <script>
+    // 你的 Google 試算表 ID
+    const SHEET_ID = "1-4mY86ruT2HnTWpPI9MJ9MYPWVTE_Yi3Zoe3PZIMSbs";
+
+    // 若歌曲資料不是在第一個工作表，請打開該分頁，複製網址 gid= 後面的數字並貼到這裡
+    const SHEET_GID = "0";
+
+    const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${SHEET_GID}`;
+
+    let songs = [];
+    let lastPickedIndex = -1;
+
+    const statusEl = document.getElementById("status");
+    const resultEl = document.getElementById("result");
+    const listEl = document.getElementById("songList");
+    const drawBtn = document.getElementById("drawBtn");
+    const reloadBtn = document.getElementById("reloadBtn");
+
+    function parseCSV(text) {
+      const rows = [];
+      let row = [];
+      let cell = "";
+      let quote = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+
+        if (char === '"' && quote && next === '"') {
+          cell += '"';
+          i++;
+        } else if (char === '"') {
+          quote = !quote;
+        } else if (char === ',' && !quote) {
+          row.push(cell);
+          cell = "";
+        } else if ((char === "\n" || char === "\r") && !quote) {
+          if (cell || row.length) {
+            row.push(cell);
+            rows.push(row);
+            row = [];
+            cell = "";
+          }
+          if (char === "\r" && next === "\n") i++;
+        } else {
+          cell += char;
+        }
+      }
+
+      if (cell || row.length) {
+        row.push(cell);
+        rows.push(row);
+      }
+
+      return rows.map(r => r.map(c => c.trim())).filter(r => r.some(Boolean));
+    }
+
+    function normalizeRows(rows) {
+      if (!rows.length) return [];
+
+      const firstRow = rows[0].map(x => String(x).trim().toLowerCase());
+      const headerKeywords = ["歌曲", "歌名", "song", "title", "曲名", "歌手", "artist", "singer", "演唱者", "備註", "note", "memo", "說明"];
+      const hasHeader = firstRow.some(x => headerKeywords.includes(x));
+      const headers = hasHeader ? rows[0].map(h => String(h).trim().toLowerCase()) : [];
+      const data = hasHeader ? rows.slice(1) : rows;
+
+      const findCol = names => headers.findIndex(h => names.includes(h));
+      const titleCol = hasHeader ? findCol(["歌曲", "歌名", "song", "title", "曲名"]) : 0;
+      const artistCol = hasHeader ? findCol(["歌手", "artist", "singer", "演唱者"]) : 1;
+      const noteCol = hasHeader ? findCol(["備註", "note", "memo", "說明"]) : 2;
+
+      return data.map(r => ({
+        title: r[titleCol >= 0 ? titleCol : 0] || "",
+        artist: artistCol >= 0 ? (r[artistCol] || "") : "",
+        note: noteCol >= 0 ? (r[noteCol] || "") : ""
+      })).filter(song => song.title);
+    }
+
+    function escapeHTML(str) {
+      return String(str || "").replace(/[&<>'"]/g, tag => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "'": "&#39;",
+        '"': "&quot;"
+      }[tag]));
+    }
+
+    function renderList() {
+      listEl.innerHTML = "";
+
+      if (!songs.length) {
+        listEl.innerHTML = `<div class="song-item"><strong>目前沒有讀到歌曲</strong><small>請確認試算表已公開，且第一欄有歌曲名稱。</small></div>`;
+        return;
+      }
+
+      songs.forEach((song, index) => {
+        const div = document.createElement("div");
+        div.className = "song-item";
+        div.innerHTML = `
+          <strong>${index + 1}. ${escapeHTML(song.title)}</strong>
+          <small>${escapeHTML([song.artist, song.note].filter(Boolean).join("｜"))}</small>
+        `;
+        listEl.appendChild(div);
+      });
+    }
+
+    function showSong(song) {
+      resultEl.innerHTML = `
+        <div>
+          <p class="song-title">${escapeHTML(song.title)}</p>
+          ${song.artist ? `<div class="song-sub">${escapeHTML(song.artist)}</div>` : ""}
+          ${song.note ? `<div class="note">${escapeHTML(song.note)}</div>` : ""}
+        </div>
+      `;
+    }
+
+    function drawSong() {
+      if (!songs.length) return;
+
+      let index = Math.floor(Math.random() * songs.length);
+      if (songs.length > 1) {
+        while (index === lastPickedIndex) {
+          index = Math.floor(Math.random() * songs.length);
+        }
+      }
+
+      lastPickedIndex = index;
+      showSong(songs[index]);
+    }
+
+    async function loadSongs() {
+      statusEl.textContent = "讀取中…";
+      drawBtn.disabled = true;
+
+      try {
+        const response = await fetch(`${CSV_URL}&cacheBust=${Date.now()}`);
+        if (!response.ok) throw new Error("無法讀取試算表");
+
+        const csvText = await response.text();
+        songs = normalizeRows(parseCSV(csvText));
+
+        statusEl.textContent = `已載入 ${songs.length} 首`;
+        drawBtn.disabled = songs.length === 0;
+        renderList();
+
+        if (songs.length) {
+          showSong({ title: "準備好了", artist: "按下按鈕開始抽歌", note: "" });
+        }
+      } catch (error) {
+        statusEl.textContent = "讀取失敗";
+        resultEl.innerHTML = `<div><p class="song-title">讀取失敗</p><div class="song-sub">請確認試算表共用權限為「知道連結的任何人可查看」。</div></div>`;
+        listEl.innerHTML = `<div class="song-item"><strong>${escapeHTML(error.message)}</strong><small>Google 試算表可能尚未公開或 gid 不正確。</small></div>`;
+      }
+    }
+
+    drawBtn.addEventListener("click", drawSong);
+    reloadBtn.addEventListener("click", loadSongs);
+
+    loadSongs();
+  </script>
+</body>
+</html>
